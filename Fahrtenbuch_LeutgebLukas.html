@@ -1,0 +1,887 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#0c0e12">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Fahrtenbuch">
+<meta name="mobile-web-app-capable" content="yes">
+<link rel="manifest" id="manifestLink">
+<title>Fahrtenbuch</title>
+
+<script>
+// ── Inline Manifest (kein Server nötig) ──
+const manifest = {
+  name:"Fahrtenbuch – Lukas Leutgeb",
+  short_name:"Fahrtenbuch",
+  description:"Digitales Fahrtenbuch VW T7",
+  start_url:"./",
+  display:"standalone",
+  background_color:"#0c0e12",
+  theme_color:"#0c0e12",
+  orientation:"portrait",
+  icons:[{
+    src:"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'%3E%3Crect width='192' height='192' fill='%230c0e12'/%3E%3Crect x='16' y='16' width='160' height='160' rx='24' fill='%23e8b000'/%3E%3Ctext x='50%25' y='58%25' dominant-baseline='middle' text-anchor='middle' font-family='Arial Black' font-weight='900' font-size='90' fill='%23000'%3EF%3C/text%3E%3C/svg%3E",
+    sizes:"192x192",type:"image/svg+xml",purpose:"any maskable"
+  }]
+};
+const blob=new Blob([JSON.stringify(manifest)],{type:'application/json'});
+document.getElementById('manifestLink').href=URL.createObjectURL(blob);
+</script>
+
+<!-- jsPDF -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Barlow:wght@400;500;600&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+
+<style>
+:root{
+  --bg:#0c0e12;--s1:#13161d;--s2:#1a1e28;
+  --border:#252b38;--border2:#303848;
+  --acc:#e8b000;--acc2:#ff5e1a;
+  --green:#2ecc71;--red:#e74c3c;
+  --txt:#dde2ee;--txt2:#7a8499;--txt3:#4a5468;
+  --r:12px;
+  --head:'Barlow Condensed',sans-serif;
+  --body:'Barlow',sans-serif;
+  --mono:'Share Tech Mono',monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;background:var(--bg);color:var(--txt);font-family:var(--body);overflow-x:hidden}
+
+/* HEADER */
+header{
+  background:var(--s1);border-bottom:1px solid var(--border);
+  padding:0 16px;display:flex;align-items:center;
+  justify-content:space-between;height:56px;
+  position:sticky;top:0;z-index:100;
+}
+.logo{font-family:var(--head);font-size:21px;font-weight:800;letter-spacing:1px;text-transform:uppercase}
+.logo em{color:var(--acc);font-style:normal}
+.nav{display:flex;background:var(--bg);border-radius:7px;padding:3px;gap:2px}
+.np{
+  background:none;border:none;color:var(--txt2);
+  font-family:var(--head);font-size:12px;font-weight:700;
+  letter-spacing:.5px;text-transform:uppercase;
+  padding:5px 10px;border-radius:5px;cursor:pointer;transition:all .15s;
+}
+.np.on{background:var(--acc);color:#000}
+
+/* MAIN */
+main{padding:14px 13px 100px;max-width:550px;margin:0 auto}
+.panel{display:none}.panel.on{display:block}
+
+/* CARD */
+.card{
+  background:var(--s1);border:1px solid var(--border);
+  border-radius:var(--r);padding:15px;margin-bottom:11px;
+  position:relative;overflow:hidden;
+}
+.card::after{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,var(--acc),var(--acc2))}
+.cl{font-family:var(--head);font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--txt3);margin-bottom:12px}
+
+/* FIELDS */
+.f{margin-bottom:11px}
+.f label{display:block;font-size:10px;font-weight:600;color:var(--txt2);letter-spacing:.8px;text-transform:uppercase;margin-bottom:4px}
+.f input,.f select,.f textarea{
+  width:100%;background:var(--bg);border:1px solid var(--border);
+  border-radius:9px;color:var(--txt);font-family:var(--body);font-size:16px;
+  padding:11px 12px;outline:none;transition:border-color .18s;
+  -webkit-appearance:none;appearance:none;
+}
+.f input:focus,.f select:focus,.f textarea:focus{border-color:var(--acc)}
+.f input[readonly]{color:var(--txt2);background:var(--s2)}
+.f textarea{resize:none;min-height:60px}
+.fr{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.f input[type=date],
+.f input[type=month]{color-scheme:dark}
+
+/* KM BOX */
+.kmbox{
+  display:flex;align-items:center;justify-content:space-between;
+  background:var(--bg);border:1px solid var(--border2);
+  border-radius:10px;padding:12px 14px;
+}
+.kmlbl{font-family:var(--mono);font-size:9px;color:var(--txt3);letter-spacing:1px;text-transform:uppercase}
+.kmbig{font-family:var(--mono);font-size:30px;color:var(--acc)}
+.kmbig small{font-size:12px;color:var(--txt2)}
+
+/* FZ BADGE */
+.fzbadge{
+  display:inline-flex;align-items:center;gap:6px;
+  background:rgba(232,176,0,.1);border:1px solid rgba(232,176,0,.22);
+  border-radius:6px;padding:5px 10px;
+  font-family:var(--mono);font-size:11px;color:var(--acc);margin-top:5px;
+}
+
+/* BUTTONS */
+.btn-save{
+  width:100%;background:var(--acc);color:#000;border:none;
+  border-radius:10px;font-family:var(--head);font-size:16px;font-weight:800;
+  letter-spacing:.5px;text-transform:uppercase;padding:15px;cursor:pointer;
+  transition:transform .1s,opacity .15s;margin-top:4px;
+}
+.btn-save:active{transform:scale(.98);opacity:.85}
+
+.btn-pdf{
+  width:100%;
+  background:linear-gradient(135deg,#e74c3c 0%,#c0392b 100%);
+  color:#fff;border:none;border-radius:10px;
+  font-family:var(--head);font-size:16px;font-weight:800;
+  letter-spacing:.5px;text-transform:uppercase;padding:15px;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;gap:8px;
+  transition:transform .1s,opacity .15s;
+}
+.btn-pdf:active{transform:scale(.98);opacity:.85}
+.btn-pdf .pico{font-size:19px}
+
+.btn2{
+  flex:1;background:var(--s2);border:1px solid var(--border2);
+  color:var(--txt);border-radius:9px;
+  font-family:var(--head);font-size:13px;font-weight:700;
+  letter-spacing:.3px;text-transform:uppercase;
+  padding:11px;cursor:pointer;transition:opacity .15s;text-align:center;
+}
+.btn2:active{opacity:.65}
+.brow{display:flex;gap:8px}
+
+/* ENTRIES */
+.entry{
+  background:var(--s1);border:1px solid var(--border);
+  border-radius:var(--r);padding:12px 13px;margin-bottom:8px;
+  position:relative;cursor:pointer;transition:border-color .15s;
+}
+.entry:active{border-color:var(--acc)}
+.er1{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px}
+.edate{font-family:var(--mono);font-size:10px;color:var(--txt2)}
+.ekm{font-family:var(--mono);font-size:17px;color:var(--acc)}
+.ekm small{font-size:10px;color:var(--txt2)}
+.eroute{font-size:13px;font-weight:600;color:var(--txt);margin-bottom:3px;line-height:1.3}
+.emeta{font-size:10px;color:var(--txt2)}
+.edel{
+  position:absolute;top:9px;right:9px;background:none;border:none;
+  color:var(--txt3);font-size:15px;cursor:pointer;padding:4px 6px;border-radius:5px;
+}
+.edel:active{color:var(--red)}
+
+/* STATS */
+.sg{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-bottom:11px}
+.sb{background:var(--s1);border:1px solid var(--border);border-radius:11px;padding:13px;text-align:center}
+.sv{font-family:var(--mono);font-size:24px;color:var(--acc);display:block}
+.sl{font-size:9px;color:var(--txt2);letter-spacing:.8px;text-transform:uppercase;margin-top:2px;display:block}
+
+/* TABLE */
+.tw{overflow-x:auto;-webkit-overflow-scrolling:touch}
+table{width:100%;border-collapse:collapse;font-size:10px;font-family:var(--mono)}
+thead tr{border-bottom:1px solid var(--border2)}
+th{padding:6px 5px;color:var(--txt2);text-align:left;white-space:nowrap;font-size:9px;letter-spacing:.5px}
+td{padding:5px 5px;border-bottom:1px solid var(--border);white-space:nowrap}
+.kmt{color:var(--acc);text-align:right;font-weight:700}
+.tft td{color:var(--txt);border-top:1px solid var(--border2);font-weight:700}
+
+/* FILTER */
+.filters{display:flex;gap:6px;margin-bottom:11px;overflow-x:auto;scrollbar-width:none}
+.filters::-webkit-scrollbar{display:none}
+.fc{
+  background:var(--s1);border:1px solid var(--border);
+  border-radius:18px;color:var(--txt2);
+  font-size:10px;font-weight:700;letter-spacing:.5px;
+  padding:5px 12px;cursor:pointer;white-space:nowrap;
+  transition:all .15s;font-family:var(--head);text-transform:uppercase;
+}
+.fc.on{background:rgba(232,176,0,.12);border-color:var(--acc);color:var(--acc)}
+
+/* EMPTY */
+.empty{text-align:center;padding:50px 20px;color:var(--txt2)}
+.empty .ei{font-size:40px;margin-bottom:10px}
+.empty p{font-size:12px;line-height:1.6}
+
+/* TOAST */
+.toast{
+  position:fixed;bottom:85px;left:50%;
+  transform:translateX(-50%) translateY(14px);
+  color:#000;font-family:var(--head);font-size:13px;font-weight:800;
+  letter-spacing:.4px;text-transform:uppercase;
+  padding:9px 20px;border-radius:18px;
+  opacity:0;transition:all .25s;z-index:999;pointer-events:none;white-space:nowrap;
+}
+.toast.on{opacity:1;transform:translateX(-50%) translateY(0)}
+
+/* MODAL */
+.mbd{display:none;position:fixed;inset:0;background:rgba(0,0,0,.78);z-index:200;align-items:flex-end}
+.mbd.on{display:flex}
+.modal{
+  background:var(--s1);border-radius:18px 18px 0 0;width:100%;
+  max-height:88dvh;overflow-y:auto;padding:16px 13px 44px;
+  border-top:1px solid var(--border2);
+}
+.mh{width:34px;height:3px;background:var(--border2);border-radius:2px;margin:0 auto 13px}
+.mt{font-family:var(--head);font-size:19px;font-weight:800;letter-spacing:.5px;text-transform:uppercase;margin-bottom:13px}
+
+/* PDF LOADER */
+.pover{
+  display:none;position:fixed;inset:0;
+  background:rgba(0,0,0,.88);z-index:300;
+  align-items:center;justify-content:center;flex-direction:column;gap:13px;
+}
+.pover.on{display:flex}
+.pspin{
+  width:42px;height:42px;border:3px solid var(--border);
+  border-top-color:var(--red);border-radius:50%;
+  animation:spin .65s linear infinite;
+}
+@keyframes spin{to{transform:rotate(360deg)}}
+.plbl{font-family:var(--head);font-size:14px;font-weight:700;color:var(--txt2);letter-spacing:1px;text-transform:uppercase}
+
+/* INSTALL */
+.ibanner{
+  background:linear-gradient(135deg,rgba(232,176,0,.1),rgba(255,94,26,.07));
+  border:1px solid rgba(232,176,0,.22);border-radius:var(--r);
+  padding:11px 13px;margin-bottom:11px;
+  display:flex;align-items:center;gap:10px;
+}
+.ibanner .ii{font-size:22px}
+.ibanner .it{flex:1}
+.ibanner .it strong{font-family:var(--head);font-size:13px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;color:var(--acc);display:block}
+.ibanner .it span{font-size:10px;color:var(--txt2)}
+.ibanner button{
+  background:var(--acc);color:#000;border:none;border-radius:7px;
+  font-family:var(--head);font-size:12px;font-weight:800;
+  text-transform:uppercase;letter-spacing:.3px;
+  padding:7px 12px;cursor:pointer;white-space:nowrap;
+}
+
+/* iOS hint */
+.ios-hint{
+  background:rgba(232,176,0,.08);border:1px solid rgba(232,176,0,.2);
+  border-radius:var(--r);padding:11px 13px;margin-bottom:11px;
+  font-size:11px;color:var(--txt2);line-height:1.6;display:none;
+}
+.ios-hint strong{color:var(--acc)}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">Fahrt<em>buch</em></div>
+  <div class="nav">
+    <button class="np on" onclick="tab('neu',this)">+ Neu</button>
+    <button class="np" onclick="tab('fahrten',this)">Fahrten</button>
+    <button class="np" onclick="tab('export',this)">Export</button>
+  </div>
+</header>
+
+<main>
+
+<!-- ══ NEU ══ -->
+<div id="p-neu" class="panel on">
+
+  <div id="installBanner" class="ibanner" style="display:none">
+    <div class="ii">📲</div>
+    <div class="it">
+      <strong>App installieren</strong>
+      <span>Offline verfügbar · Daten gespeichert</span>
+    </div>
+    <button id="installBtn">Installieren</button>
+  </div>
+
+  <div id="iosHint" class="ios-hint">
+    📱 <strong>iOS:</strong> Tippe auf <strong>Teilen</strong> → <strong>„Zum Home-Bildschirm"</strong> um die App zu installieren
+  </div>
+
+  <div class="card">
+    <div class="cl">Fahrtdetails</div>
+    <div class="f">
+      <label>Datum</label>
+      <input type="date" id="datum">
+    </div>
+    <div class="f">
+      <label>Fahrer</label>
+      <input type="text" id="fahrer" value="Lukas Leutgeb" readonly>
+    </div>
+    <div class="f">
+      <label>Fahrzeug</label>
+      <input type="text" id="fahrzeug" value="VW T7" readonly>
+      <div class="fzbadge">🚐 VW T7 — Dienstfahrzeug · Privat</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="cl">Kilometerstand</div>
+    <div class="fr">
+      <div class="f">
+        <label>KM Start</label>
+        <input type="number" id="kmS" placeholder="z.B. 45200" inputmode="numeric" oninput="calcKm()">
+      </div>
+      <div class="f">
+        <label>KM Ende</label>
+        <input type="number" id="kmE" placeholder="z.B. 45350" inputmode="numeric" oninput="calcKm()">
+      </div>
+    </div>
+    <div class="kmbox">
+      <div class="kmlbl">Gefahrene Kilometer</div>
+      <div class="kmbig" id="kmBig">— <small>km</small></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="cl">Route</div>
+    <div class="f">
+      <label>Abfahrtsort</label>
+      <input type="text" id="vonOrt" placeholder="z.B. Zwettl an der Rodl">
+    </div>
+    <div class="f">
+      <label>Zielort <span style="color:var(--txt3);font-size:9px">(optional)</span></label>
+      <input type="text" id="nachOrt" placeholder="z.B. Linz – Kunde XY">
+    </div>
+    <div class="f">
+      <label>Notiz <span style="color:var(--txt3);font-size:9px">(optional)</span></label>
+      <textarea id="notiz" placeholder="z.B. Wartung, Kundenbesuch..."></textarea>
+    </div>
+    <button class="btn-save" onclick="save()">✓ Fahrt speichern</button>
+  </div>
+</div>
+
+<!-- ══ FAHRTEN ══ -->
+<div id="p-fahrten" class="panel">
+  <div class="filters">
+    <button class="fc on" onclick="setF('alle',this)">Alle</button>
+    <button class="fc" onclick="setF('heute',this)">Heute</button>
+    <button class="fc" onclick="setF('monat',this)">Dieser Monat</button>
+  </div>
+  <div id="list"></div>
+</div>
+
+<!-- ══ EXPORT ══ -->
+<div id="p-export" class="panel">
+
+  <div class="card">
+    <div class="cl">Zeitraum</div>
+    <div class="f">
+      <label>Monat wählen</label>
+      <input type="month" id="expM" oninput="renderStats()">
+    </div>
+    <div class="f">
+      <label>Kennzeichen <span style="color:var(--txt3);font-size:9px">(optional)</span></label>
+      <input type="text" id="kz" placeholder="z.B. LF-123AB">
+    </div>
+  </div>
+
+  <div class="sg">
+    <div class="sb"><span class="sv" id="sv1">–</span><span class="sl">Gesamt km</span></div>
+    <div class="sb"><span class="sv" id="sv2">–</span><span class="sl">Fahrten</span></div>
+    <div class="sb"><span class="sv" id="sv3">–</span><span class="sl">Ø km/Fahrt</span></div>
+    <div class="sb"><span class="sv" id="sv4">–</span><span class="sl">Tage aktiv</span></div>
+  </div>
+
+  <!-- PDF HAUPTAKTION -->
+  <div class="card">
+    <div class="cl">PDF Fahrtenbuch — per E-Mail an Firma</div>
+    <button class="btn-pdf" onclick="exportPDF()">
+      <span class="pico">📄</span>
+      PDF erstellen &amp; per Mail senden
+    </button>
+    <p style="font-size:10px;color:var(--txt2);margin-top:10px;text-align:center;line-height:1.6">
+      Professionelles PDF · direkt mit der Mail-App teilen<br>
+      Enthält alle Fahrten, KM-Stände &amp; Unterschriftszeilen
+    </p>
+  </div>
+
+  <div class="card">
+    <div class="cl">Weitere Optionen</div>
+    <div class="brow">
+      <button class="btn2" onclick="exportCSV()">📊 CSV</button>
+      <button class="btn2" onclick="drucken()">🖨️ Drucken</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="cl">Vorschau Tabelle</div>
+    <div class="tw" id="tblWrap">
+      <div class="empty"><div class="ei">📋</div><p>Monat wählen</p></div>
+    </div>
+  </div>
+
+</div>
+</main>
+
+<div class="toast" id="toast"></div>
+
+<!-- Edit Modal -->
+<div class="mbd" id="mbd" onclick="closeM(event)">
+  <div class="modal">
+    <div class="mh"></div>
+    <div class="mt">Fahrt bearbeiten</div>
+    <div id="mcon"></div>
+    <button class="btn-save" onclick="mSave()" style="margin-top:12px">Speichern</button>
+  </div>
+</div>
+
+<!-- PDF Loading -->
+<div class="pover" id="pover">
+  <div class="pspin"></div>
+  <div class="plbl">PDF wird erstellt…</div>
+</div>
+
+<script>
+'use strict';
+
+// ── DATA ──
+let D = JSON.parse(localStorage.getItem('fb3') || '[]');
+let flt = 'alle';
+let eidx = null;
+
+const save_ = () => localStorage.setItem('fb3', JSON.stringify(D));
+const pad = n => String(n).padStart(2,'0');
+const fmtIn = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+const fmtDE = s => { if(!s) return ''; const [y,m,d]=s.split('-'); return `${d}.${m}.${y}`; };
+const fmtM = ym => {
+  if(!ym) return '';
+  const [y,m]=ym.split('-');
+  return ['Jänner','Februar','März','April','Mai','Juni','Juli','August','September','Oktober','November','Dezember'][+m-1]+' '+y;
+};
+
+// ── INIT ──
+document.addEventListener('DOMContentLoaded', ()=>{
+  document.getElementById('datum').value = fmtIn(new Date());
+  const now = new Date();
+  document.getElementById('expM').value = `${now.getFullYear()}-${pad(now.getMonth()+1)}`;
+  renderList();
+  renderStats();
+  initPWA();
+});
+
+// ── TABS ──
+function tab(n, el){
+  document.querySelectorAll('.panel').forEach(p=>p.classList.remove('on'));
+  document.querySelectorAll('.np').forEach(b=>b.classList.remove('on'));
+  document.getElementById('p-'+n).classList.add('on');
+  el.classList.add('on');
+  if(n==='fahrten') renderList();
+  if(n==='export') renderStats();
+}
+
+// ── KM CALC ──
+function calcKm(){
+  const s=parseFloat(document.getElementById('kmS').value)||0;
+  const e=parseFloat(document.getElementById('kmE').value)||0;
+  const d=Math.round((e-s)*10)/10;
+  const el=document.getElementById('kmBig');
+  if(d>0){el.innerHTML=`${d} <small>km</small>`;el.style.color='var(--acc)';}
+  else if(d<0){el.innerHTML=`<span style="color:var(--red)">Ungültig</span>`;}
+  else{el.innerHTML=`— <small>km</small>`;el.style.color='var(--acc)';}
+}
+
+// ── SAVE FAHRT ──
+function save(){
+  const datum=document.getElementById('datum').value;
+  const kmS=parseFloat(document.getElementById('kmS').value);
+  const kmE=parseFloat(document.getElementById('kmE').value);
+  const von=document.getElementById('vonOrt').value.trim();
+  const nach=document.getElementById('nachOrt').value.trim();
+  const notiz=document.getElementById('notiz').value.trim();
+
+  if(!datum){toast('⚠ Datum fehlt',true);return;}
+  if(isNaN(kmS)||isNaN(kmE)||kmE<=kmS){toast('⚠ KM-Werte prüfen',true);return;}
+
+  D.unshift({id:Date.now(),datum,fahrer:'Lukas Leutgeb',fahrzeug:'VW T7',fahrtart:'Privat',kmS,kmE,km:Math.round((kmE-kmS)*10)/10,von,nach,notiz});
+  save_();
+
+  // Reset
+  ['kmS','kmE','vonOrt','nachOrt','notiz'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('datum').value=fmtIn(new Date());
+  document.getElementById('kmBig').innerHTML='— <small>km</small>';
+
+  toast('✓ Fahrt gespeichert');
+  renderList();renderStats();
+}
+
+// ── LIST ──
+function setF(f,el){
+  flt=f;
+  document.querySelectorAll('.fc').forEach(c=>c.classList.remove('on'));
+  el.classList.add('on');
+  renderList();
+}
+
+function renderList(){
+  const el=document.getElementById('list');
+  const now=new Date(),heute=fmtIn(now);
+  const ym=`${now.getFullYear()}-${pad(now.getMonth()+1)}`;
+  let data=[...D];
+  if(flt==='heute') data=data.filter(e=>e.datum===heute);
+  if(flt==='monat') data=data.filter(e=>e.datum&&e.datum.startsWith(ym));
+
+  if(!data.length){
+    el.innerHTML=`<div class="empty"><div class="ei">🚐</div><p>Keine Fahrten vorhanden.<br>Tippe <strong>+ Neu</strong> um zu beginnen.</p></div>`;
+    return;
+  }
+  el.innerHTML=data.map(e=>{
+    const ri=D.indexOf(e);
+    const route=[e.von,e.nach].filter(Boolean).join(' → ')||'Keine Route';
+    return `<div class="entry" onclick="openEdit(${ri})">
+      <div class="er1">
+        <div>
+          <div class="edate">${fmtDE(e.datum)} · VW T7 · Privat</div>
+          <div class="eroute">${route}</div>
+          <div class="emeta">KM ${e.kmS} → ${e.kmE}${e.notiz?' · '+e.notiz.slice(0,32)+(e.notiz.length>32?'…':''):''}</div>
+        </div>
+        <div class="ekm">${e.km}<small> km</small></div>
+      </div>
+      <button class="edel" onclick="delE(event,${ri})">✕</button>
+    </div>`;
+  }).join('');
+}
+
+function delE(ev,idx){
+  ev.stopPropagation();
+  if(!confirm('Eintrag löschen?')) return;
+  D.splice(idx,1);save_();renderList();renderStats();toast('Gelöscht');
+}
+
+// ── EDIT ──
+function openEdit(idx){
+  eidx=idx;const e=D[idx];
+  document.getElementById('mcon').innerHTML=`
+    <div class="f"><label>Datum</label><input type="date" id="m-d" value="${e.datum}"></div>
+    <div class="fr">
+      <div class="f"><label>KM Start</label><input type="number" id="m-s" value="${e.kmS}" inputmode="numeric"></div>
+      <div class="f"><label>KM Ende</label><input type="number" id="m-e" value="${e.kmE}" inputmode="numeric"></div>
+    </div>
+    <div class="f"><label>Von</label><input type="text" id="m-von" value="${e.von||''}"></div>
+    <div class="f"><label>Nach</label><input type="text" id="m-nach" value="${e.nach||''}"></div>
+    <div class="f"><label>Notiz</label><textarea id="m-not">${e.notiz||''}</textarea></div>
+  `;
+  document.getElementById('mbd').classList.add('on');
+}
+function closeM(ev){if(ev.target===document.getElementById('mbd'))document.getElementById('mbd').classList.remove('on');}
+function mSave(){
+  const e=D[eidx];
+  const s=parseFloat(document.getElementById('m-s').value);
+  const en=parseFloat(document.getElementById('m-e').value);
+  e.datum=document.getElementById('m-d').value;
+  e.kmS=s;e.kmE=en;e.km=Math.round((en-s)*10)/10;
+  e.von=document.getElementById('m-von').value;
+  e.nach=document.getElementById('m-nach').value;
+  e.notiz=document.getElementById('m-not').value;
+  save_();
+  document.getElementById('mbd').classList.remove('on');
+  renderList();renderStats();toast('✓ Gespeichert');
+}
+
+// ── STATS ──
+function renderStats(){
+  const ym=document.getElementById('expM')?.value;
+  const data=ym?D.filter(e=>e.datum&&e.datum.startsWith(ym)):D;
+  const sorted=[...data].sort((a,b)=>a.datum.localeCompare(b.datum));
+  const gesamt=sorted.reduce((s,e)=>s+(e.km||0),0);
+  const tage=new Set(sorted.map(e=>e.datum)).size;
+
+  document.getElementById('sv1').textContent=gesamt.toFixed(1);
+  document.getElementById('sv2').textContent=sorted.length;
+  document.getElementById('sv3').textContent=sorted.length?(gesamt/sorted.length).toFixed(1):'–';
+  document.getElementById('sv4').textContent=tage||'–';
+
+  const w=document.getElementById('tblWrap');
+  if(!sorted.length){w.innerHTML=`<div class="empty" style="padding:25px 10px"><div class="ei">📋</div><p>Keine Daten</p></div>`;return;}
+  w.innerHTML=`<table>
+    <thead><tr><th>Datum</th><th>Von → Nach</th><th>KM-Stand</th><th>km</th></tr></thead>
+    <tbody>${sorted.map(e=>`<tr>
+      <td>${fmtDE(e.datum)}</td>
+      <td>${[e.von,e.nach].filter(Boolean).join(' → ')||'–'}</td>
+      <td style="color:var(--txt2)">${e.kmS}→${e.kmE}</td>
+      <td class="kmt">${e.km}</td>
+    </tr>`).join('')}</tbody>
+    <tfoot><tr class="tft"><td colspan="3">Gesamt ${sorted.length} Fahrten</td><td class="kmt">${gesamt.toFixed(1)}</td></tr></tfoot>
+  </table>`;
+}
+
+// ══════════════════════════════════
+// ── PDF EXPORT ──
+// ══════════════════════════════════
+async function exportPDF(){
+  const ym=document.getElementById('expM').value;
+  const kz=document.getElementById('kz').value.trim();
+  const data=ym?D.filter(e=>e.datum&&e.datum.startsWith(ym)):D;
+  const sorted=[...data].sort((a,b)=>a.datum.localeCompare(b.datum));
+
+  if(!sorted.length){toast('⚠ Keine Daten für diesen Zeitraum',true);return;}
+
+  const jspdfLib=window.jspdf||window;
+  if(!jspdfLib.jsPDF&&!window.jsPDF){
+    toast('⚠ PDF-Lib lädt noch, kurz warten…',true);return;
+  }
+
+  document.getElementById('pover').classList.add('on');
+  await new Promise(r=>setTimeout(r,200));
+
+  try{
+    const {jsPDF}=window.jspdf||{jsPDF:window.jsPDF};
+    const doc=new jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
+    const W=210,H=297,ML=14,MR=14;
+    let y=0;
+
+    // ── HEADER BAR ──
+    doc.setFillColor(232,176,0);
+    doc.rect(0,0,W,30,'F');
+
+    doc.setFont('helvetica','bold');
+    doc.setFontSize(20);
+    doc.setTextColor(0,0,0);
+    doc.text('FAHRTENBUCH',ML,12);
+
+    doc.setFont('helvetica','normal');
+    doc.setFontSize(8);
+    doc.text('Gemäß § 4 Abs. 2 Z 2 EStG · Österreich',ML,18);
+    doc.text('Fahrtart: Privat',ML,23.5);
+
+    doc.setFont('helvetica','bold');
+    doc.setFontSize(11);
+    doc.setTextColor(10,10,30);
+    doc.text('Lukas Leutgeb',W-MR,11,{align:'right'});
+    doc.setFont('helvetica','normal');
+    doc.setFontSize(9);
+    doc.text(`VW T7${kz?' · '+kz:''}`,W-MR,17,{align:'right'});
+
+    // ── DARK STRIP ──
+    doc.setFillColor(20,22,32);
+    doc.rect(0,30,W,9,'F');
+    doc.setFont('helvetica','normal');
+    doc.setFontSize(8);
+    doc.setTextColor(180,185,200);
+    doc.text(`Zeitraum: ${ym?fmtM(ym):'Gesamt'}   ·   Erstellt: ${fmtDE(fmtIn(new Date()))}   ·   Fahrten: ${sorted.length}`,ML,35.5);
+
+    y=48;
+
+    // ── KPI BOXES ──
+    const gesamt=sorted.reduce((s,e)=>s+(e.km||0),0);
+    const kvs=[
+      ['FAHRTEN',sorted.length+''],
+      ['KM GESAMT',gesamt.toFixed(1)+' km'],
+      ['Ø KM/FAHRT',(sorted.length?(gesamt/sorted.length).toFixed(1):'–')+' km'],
+      ['TAGE AKTIV',new Set(sorted.map(e=>e.datum)).size+''],
+    ];
+    const bw=(W-ML-MR-9)/4;
+    kvs.forEach(([l,v],i)=>{
+      const bx=ML+i*(bw+3);
+      doc.setFillColor(245,245,248);
+      doc.roundedRect(bx,y,bw,14,1.5,1.5,'F');
+      doc.setFont('helvetica','normal');doc.setFontSize(6);doc.setTextColor(120,125,140);
+      doc.text(l,bx+bw/2,y+4.5,{align:'center'});
+      doc.setFont('helvetica','bold');doc.setFontSize(10);doc.setTextColor(20,20,40);
+      doc.text(v,bx+bw/2,y+11,{align:'center'});
+    });
+    y+=20;
+
+    // ── TABLE HEADER ──
+    const cols=['Nr','Datum','Von','Nach','KM-Start','KM-Ende','km','Notiz'];
+    const cw=[9,21,36,36,17,17,13,30];
+
+    const drawTH=()=>{
+      doc.setFillColor(20,22,32);
+      doc.rect(ML,y,W-ML-MR,7,'F');
+      doc.setFont('helvetica','bold');doc.setFontSize(7);doc.setTextColor(190,195,210);
+      let cx=ML+1.5;
+      cols.forEach((c,i)=>{doc.text(c,cx,y+4.8);cx+=cw[i];});
+      y+=7;
+    };
+    drawTH();
+
+    // ── ROWS ──
+    sorted.forEach((e,idx)=>{
+      if(y>H-28){doc.addPage();y=14;drawTH();}
+
+      if(idx%2===0){doc.setFillColor(247,247,250);doc.rect(ML,y,W-ML-MR,6.2,'F');}
+
+      doc.setFont('helvetica','normal');doc.setFontSize(7.5);doc.setTextColor(25,25,40);
+      const row=[
+        (idx+1)+'',
+        fmtDE(e.datum),
+        (e.von||'–').slice(0,17),
+        (e.nach||'–').slice(0,17),
+        e.kmS+'',e.kmE+'',
+        e.km.toFixed(1),
+        (e.notiz||'').slice(0,18),
+      ];
+      let cx=ML+1.5;
+      row.forEach((v,i)=>{
+        if(i===6){
+          doc.setFont('helvetica','bold');doc.setTextColor(184,140,0);
+          doc.text(v,cx,y+4.1);
+          doc.setFont('helvetica','normal');doc.setTextColor(25,25,40);
+        } else {doc.text(v,cx,y+4.1);}
+        cx+=cw[i];
+      });
+      y+=6.2;
+    });
+
+    // ── SUMME ──
+    y+=2;
+    doc.setFillColor(20,22,32);doc.rect(ML,y,W-ML-MR,7.5,'F');
+    doc.setFont('helvetica','bold');doc.setFontSize(8);doc.setTextColor(255,255,255);
+    doc.text('SUMME GESAMT',ML+1.5,y+5);
+    doc.setTextColor(232,176,0);
+    const sumCx=ML+cw[0]+cw[1]+cw[2]+cw[3]+cw[4]+cw[5]+1.5;
+    doc.text(`${gesamt.toFixed(1)} km`,sumCx,y+5);
+    y+=14;
+
+    // ── UNTERSCHRIFT ──
+    if(y>H-40){doc.addPage();y=18;}
+    doc.setDrawColor(160,165,175);doc.setLineWidth(0.25);
+    doc.line(ML,y,ML+55,y);
+    doc.line(W-MR-55,y,W-MR,y);
+    doc.setFont('helvetica','normal');doc.setFontSize(7);doc.setTextColor(130,135,150);
+    doc.text('Datum, Unterschrift Fahrer',ML,y+4.5);
+    doc.text('Datum, Unterschrift Arbeitgeber',W-MR-55,y+4.5);
+
+    // ── FOOTER ──
+    const pc=doc.internal.getNumberOfPages();
+    for(let i=1;i<=pc;i++){
+      doc.setPage(i);
+      doc.setFillColor(245,245,248);doc.rect(0,H-9,W,9,'F');
+      doc.setFont('helvetica','normal');doc.setFontSize(6.5);doc.setTextColor(150,155,165);
+      doc.text(`Lukas Leutgeb  ·  VW T7${kz?' · '+kz:''}  ·  ${ym?fmtM(ym):'Gesamt'}  ·  Fahrtart: Privat`,ML,H-3.5);
+      doc.text(`Seite ${i} / ${pc}`,W-MR,H-3.5,{align:'right'});
+    }
+
+    const fname=`Fahrtenbuch_${ym||'Gesamt'}_LeutgebLukas.pdf`;
+    const pdfBlob=doc.output('blob');
+
+    // Mobile Share API (iOS/Android → direkt Mail App)
+    if(navigator.share&&navigator.canShare){
+      const file=new File([pdfBlob],fname,{type:'application/pdf'});
+      try{
+        if(navigator.canShare({files:[file]})){
+          document.getElementById('pover').classList.remove('on');
+          await navigator.share({
+            title:'Fahrtenbuch '+fmtM(ym||''),
+            text:`Fahrtenbuch ${fmtM(ym||'')} · Lukas Leutgeb · VW T7`,
+            files:[file]
+          });
+          toast('✓ PDF geteilt!');
+          return;
+        }
+      }catch(shareErr){
+        // Falls Share abbricht → Fallback Download
+      }
+    }
+
+    // Fallback: Download
+    doc.save(fname);
+    document.getElementById('pover').classList.remove('on');
+    toast('✓ PDF gespeichert');
+
+  }catch(err){
+    document.getElementById('pover').classList.remove('on');
+    console.error('PDF Error:',err);
+    toast('⚠ Fehler: '+err.message,true);
+  }
+}
+
+// ── CSV ──
+function exportCSV(){
+  const ym=document.getElementById('expM').value;
+  const data=ym?D.filter(e=>e.datum&&e.datum.startsWith(ym)):D;
+  if(!data.length){toast('⚠ Keine Daten',true);return;}
+  const sorted=[...data].sort((a,b)=>a.datum.localeCompare(b.datum));
+  const hdr=['Datum','Fahrer','Fahrzeug','Fahrtart','KM-Start','KM-Ende','KM-Gesamt','Von','Nach','Notiz'];
+  const rows=sorted.map(e=>[fmtDE(e.datum),'Lukas Leutgeb','VW T7','Privat',e.kmS,e.kmE,e.km,e.von||'',e.nach||'',e.notiz||'']
+    .map(v=>`"${String(v).replace(/"/g,'""')}"`).join(';'));
+  const blob=new Blob(['\uFEFF'+[hdr.join(';'),...rows].join('\n')],{type:'text/csv;charset=utf-8'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download=`Fahrtenbuch_${ym||'Gesamt'}_LeutgebLukas.csv`;
+  a.click();
+  toast('✓ CSV exportiert');
+}
+
+// ── DRUCKEN ──
+function drucken(){
+  const ym=document.getElementById('expM').value;
+  const kz=document.getElementById('kz').value.trim();
+  const data=ym?D.filter(e=>e.datum&&e.datum.startsWith(ym)):D;
+  const sorted=[...data].sort((a,b)=>a.datum.localeCompare(b.datum));
+  const gesamt=sorted.reduce((s,e)=>s+(e.km||0),0);
+  const w=window.open('','_blank');
+  w.document.write(`<!DOCTYPE html><html lang="de"><head><meta charset="UTF-8"><title>Fahrtenbuch</title>
+  <style>body{font-family:Arial,sans-serif;font-size:10px;max-width:900px;margin:0 auto;padding:20px;color:#111}
+  h1{font-size:18px}sub{color:#666;font-size:9px}
+  table{width:100%;border-collapse:collapse;margin-top:14px}
+  th{background:#1a1e28;color:#fff;padding:6px 7px;text-align:left;font-size:9px}
+  td{padding:5px 7px;border-bottom:1px solid #e8e8ee}tr:nth-child(even)td{background:#f8f8fb}
+  .km{color:#b8900a;font-weight:bold}tfoot td{font-weight:bold;background:#f0f0f5;border-top:2px solid #1a1e28}
+  .sign{display:flex;justify-content:space-between;margin-top:40px}
+  .sign div{border-top:1px solid #999;padding-top:5px;width:44%;font-size:9px;color:#666}
+  </style></head><body>
+  <h1>FAHRTENBUCH</h1>
+  <sub>Lukas Leutgeb · VW T7${kz?' · '+kz:''} · ${ym?fmtM(ym):'Gesamt'} · Privat · Erstellt: ${fmtDE(fmtIn(new Date()))}</sub>
+  <table><thead><tr><th>Nr</th><th>Datum</th><th>Von</th><th>Nach</th><th>KM-Start</th><th>KM-Ende</th><th>km</th><th>Notiz</th></tr></thead>
+  <tbody>${sorted.map((e,i)=>`<tr><td>${i+1}</td><td>${fmtDE(e.datum)}</td><td>${e.von||'–'}</td><td>${e.nach||'–'}</td><td>${e.kmS}</td><td>${e.kmE}</td><td class="km">${e.km}</td><td>${e.notiz||''}</td></tr>`).join('')}</tbody>
+  <tfoot><tr><td colspan="6">Gesamt ${sorted.length} Fahrten</td><td class="km">${gesamt.toFixed(1)} km</td><td></td></tr></tfoot></table>
+  <div class="sign"><div>Datum, Unterschrift Fahrer</div><div>Datum, Unterschrift Arbeitgeber</div></div>
+  <script>window.onload=()=>window.print()<\/script></body></html>`);
+  w.document.close();
+}
+
+// ── TOAST ──
+function toast(msg,err=false){
+  const t=document.getElementById('toast');
+  t.textContent=msg;
+  t.style.background=err?'#e74c3c':'#2ecc71';
+  t.style.color=err?'#fff':'#000';
+  t.classList.add('on');
+  setTimeout(()=>t.classList.remove('on'),2800);
+}
+
+// ── PWA / INSTALL ──
+function initPWA(){
+  // Service Worker
+  if('serviceWorker' in navigator){
+    const swCode=`
+const C='fb-sw-v3';
+const A=['./'];
+self.addEventListener('install',e=>{e.waitUntil(caches.open(C).then(c=>c.addAll(A)));self.skipWaiting();});
+self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(ks=>Promise.all(ks.filter(k=>k!==C).map(k=>caches.delete(k)))));self.clients.claim();});
+self.addEventListener('fetch',e=>{e.respondWith(caches.match(e.request).then(r=>r||fetch(e.request).catch(()=>caches.match('./'))));});
+    `;
+    const blob=new Blob([swCode],{type:'application/javascript'});
+    const url=URL.createObjectURL(blob);
+    navigator.serviceWorker.register(url).catch(()=>{});
+  }
+
+  // iOS detection
+  const isIOS=/iphone|ipad|ipod/i.test(navigator.userAgent)&&!window.MSStream;
+  const isStandalone=window.navigator.standalone;
+  if(isIOS&&!isStandalone){
+    document.getElementById('iosHint').style.display='block';
+  }
+
+  // Android install prompt
+  let deferredPrompt=null;
+  window.addEventListener('beforeinstallprompt',e=>{
+    e.preventDefault();deferredPrompt=e;
+    document.getElementById('installBanner').style.display='flex';
+  });
+  document.getElementById('installBtn')?.addEventListener('click',async()=>{
+    if(!deferredPrompt)return;
+    deferredPrompt.prompt();
+    const{outcome}=await deferredPrompt.userChoice;
+    if(outcome==='accepted'){
+      document.getElementById('installBanner').style.display='none';
+      toast('✓ App installiert!');
+    }
+    deferredPrompt=null;
+  });
+  window.addEventListener('appinstalled',()=>{
+    document.getElementById('installBanner').style.display='none';
+    document.getElementById('iosHint').style.display='none';
+    toast('✓ App am Homescreen!');
+  });
+}
+</script>
+</body>
+</html>
